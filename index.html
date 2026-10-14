@@ -157,9 +157,8 @@
 
         .download-btn svg { width: 17px; height: 17px; }
         .download-btn.is-loading { pointer-events: none; }
-        .download-btn.is-loading .btn-text { opacity: 0; }
+        .download-btn.is-loading .btn-text, .download-btn.is-success .btn-text { opacity: 0; }
         .download-btn.is-success { background: #16a34a; }
-        .download-btn.is-success .btn-text { opacity: 0; }
 
         .btn-spinner {
             display: none;
@@ -625,8 +624,6 @@
                         <td data-day="1"></td><td data-day="2"></td><td data-day="3"></td><td data-day="4"></td><td data-day="5"></td><td data-day="6"></td>
                         <td data-day="0" rowspan="2">
                             <div class="course-block cb-francais" data-course-id="francais">
-                                <span class="status-badge badge-cancelled">Annulé</span>
-                                <span class="status-badge badge-postponed">Reporté</span>
                                 <span class="cb-name">Français</span>
                                 <div class="cb-details">
                                     <span class="cb-badge">2h</span>
@@ -652,8 +649,6 @@
                         <td data-day="1"></td><td data-day="2"></td><td data-day="3"></td>
                         <td data-day="4" rowspan="2">
                             <div class="course-block cb-maths" data-course-id="maths">
-                                <span class="status-badge badge-cancelled">Annulé</span>
-                                <span class="status-badge badge-postponed">Reporté</span>
                                 <span class="cb-name">Mathématiques</span>
                                 <div class="cb-details">
                                     <span class="cb-badge">2h</span>
@@ -687,44 +682,38 @@
     BFT Education Group · Première STMG · 2026-2027
 </footer>
 
+<!-- =========================================================
+     NOUVEAU MOTEUR JAVASCRIPT (Robuste & Strict)
+========================================================= -->
 <script>
-    // =========================================================
-    // GOOGLE SHEETS — Première STMG
-    // =========================================================
     const GOOGLE_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRlhZH8-HZduOPsbbmHVYtbeVaJwPVmijJkxRWsjhix5I7UwBH4-lWOTuJn3VvBQVIN4yEOIPqDCPDJ/pub?gid=1961795058&single=true&output=csv";
+    
+    // FILTRAGE STRICT : Première STMG uniquement
     const CURRENT_LEVEL = "premiere_stmg";
 
     const DAY_MAP = { lundi: 1, mardi: 2, mercredi: 3, jeudi: 4, vendredi: 5, samedi: 6, dimanche: 0 };
 
-    const HOUR_ROW_MAP = {
-        '9h': 1, '09h': 1, '9h00': 1, '09h00': 1, '9': 1, '09': 1,
-        '10h': 2, '10h00': 2, '10': 2,
-        '11h': 3, '11h00': 3, '11': 3,
-        '12h': 4, '12h00': 4, '12': 4,
-        '13h': 5, '13h00': 5, '13': 5,
-        '14h': 6, '14h00': 6, '14': 6,
-        '15h': 7, '15h00': 7, '15': 7,
-        '16h': 8, '16h00': 8, '16': 8,
-        '17h': 9, '17h00': 9, '17': 9,
-        '18h': 10, '18h00': 10, '18': 10,
-        '19h': 11, '19h00': 11, '19': 11,
-        '20h': 12, '20h00': 12, '20': 12
-    };
+    // Extraction universelle de l'heure
+    function parseRowIndex(hourStr) {
+        if (!hourStr) return null;
+        const match = hourStr.match(/(\d{1,2})/);
+        if (!match) return null;
+        const h = parseInt(match[1], 10);
+        if (h >= 9 && h <= 20) return h - 8;
+        return null;
+    }
 
     const today = new Date().getDay();
     document.querySelectorAll('#timetable th[data-day]').forEach(el => {
         if (parseInt(el.dataset.day) === today) el.classList.add('today-header');
     });
 
-    function placeRattrapageCourse(courseId, subjectName, dayName, hourStart, noteText) {
+    // Placement dynamique de cours
+    function placeDynamicCourseBlock(courseId, subjectName, dayName, hourStart, status, noteText) {
         const dayNum = DAY_MAP[dayName.toLowerCase().trim()];
-        let h = hourStart.toLowerCase().trim().replace(/\s/g, '');
-        const rowIndex = HOUR_ROW_MAP[h];
+        const rowIndex = parseRowIndex(hourStart);
 
-        if (dayNum === undefined || !rowIndex) {
-            console.warn('Créneau non reconnu:', dayName, hourStart);
-            return;
-        }
+        if (dayNum === undefined || !rowIndex) return;
 
         const tbody = document.querySelector('#timetable tbody');
         const rows = tbody.querySelectorAll('tr');
@@ -734,7 +723,7 @@
         const targetCell = targetRow.querySelector(`td[data-day="${dayNum}"]`);
         if (!targetCell) return;
 
-        // 2h → rowspan 2 + masque la ligne suivante
+        // Fusion 2h
         if (rowIndex < rows.length) {
             const nextRow = rows[rowIndex];
             if (nextRow) {
@@ -747,32 +736,37 @@
             targetCell.setAttribute('rowspan', '2');
         }
 
-        const orig = document.querySelector(`.course-block[data-course-id="${courseId}"]`);
-        let cbClass = 'cb-' + courseId;
-        if (orig) {
-            const found = Array.from(orig.classList).find(c => c.startsWith('cb-') && c !== 'cb-custom-note');
-            if (found) cbClass = found;
-        }
-
-        let startHInt = parseInt(hourStart);
+        let cbClass = 'cb-' + courseId.replace(/-ven$/, '');
+        let startHInt = parseInt(hourStart.match(/(\d{1,2})/)[1], 10);
         let endHInt = startHInt + 2;
 
+        let badgeHtml = '';
+        let statusClass = 'is-rattrapage';
+
+        if (status.includes('deplac') || status.includes('déplac')) {
+            badgeHtml = '<span class="status-badge badge-rattrapage" style="display:block; background:#0284c7; color:#fff;">🔀 DÉPLACÉ</span>';
+        } else if (status.includes('report') || status.includes('postpon')) {
+            badgeHtml = '<span class="status-badge badge-rattrapage" style="display:block; background:#f59e0b; color:#fff;">⏳ REPORTÉ</span>';
+        } else if (status.includes('rattrap') || status.includes('suppl')) {
+            badgeHtml = '<span class="status-badge badge-rattrapage" style="display:block; background:#4f46e5; color:#fff;">★ RATTRAPAGE</span>';
+        }
+
         targetCell.innerHTML = `
-            <div class="course-block ${cbClass} is-rattrapage">
-                <span class="status-badge badge-rattrapage" style="display:block">★ RATTRAPAGE</span>
+            <div class="course-block ${cbClass} ${statusClass}" data-course-id="${courseId}-dynamic">
+                ${badgeHtml}
                 <span class="cb-name">${subjectName}</span>
                 <div class="cb-details">
                     <span class="cb-badge">2h</span>
                     <span class="cb-time">${startHInt}h – ${endHInt}h</span>
                 </div>
-                ${noteText ? `<div class="cb-custom-note" style="display:block">📅 ${noteText}</div>` : ''}
+                ${noteText ? `<div class="cb-custom-note" style="display:block">📌 ${noteText}</div>` : ''}
             </div>
         `;
     }
 
+    // Synchro Google Sheets
     async function fetchGoogleSheetsStatuses() {
         if (!GOOGLE_SHEET_CSV_URL) return;
-
         try {
             const res = await fetch(GOOGLE_SHEET_CSV_URL + (GOOGLE_SHEET_CSV_URL.includes('?') ? '&' : '?') + 't=' + Date.now());
             if (!res.ok) return;
@@ -786,79 +780,83 @@
 
                 if (cols.length < 4) return;
 
-                const level    = (cols[0] || '').toLowerCase();
-                const courseId = (cols[1] || '').toLowerCase();
+                const level    = (cols[0] || '').toLowerCase().trim();
+                const courseId = (cols[1] || '').toLowerCase().trim();
                 const subject  = cols[2] || '';
-                const status   = (cols[3] || '').toLowerCase();
+                const status   = (cols[3] || '').toLowerCase().trim();
                 const day      = cols[4] || '';
                 const hour     = cols[5] || '';
                 const note     = cols[6] || '';
                 const date     = cols[7] || '';
 
-                if (level !== CURRENT_LEVEL.toLowerCase()) return;
+                // FILTRAGE STRICT PAR CLASSE
+                if (level !== CURRENT_LEVEL) return;
 
-                // Rattrapage / Supplémentaire → nouvelle case à l'heure exacte
-                if (status.includes('rattrap') || status.includes('suppl')) {
-                    if (day && hour) {
-                        const extra = [date, note].filter(Boolean).join(' · ');
-                        placeRattrapageCourse(courseId, subject, day, hour, extra);
-                    }
-                    return;
+                const combinedNote = [note, date].filter(Boolean).join(' · ');
+                const blocks = document.querySelectorAll(`.course-block[data-course-id="${courseId}"]`);
+
+                // 1) COURS NORMAL (RÉINITIALISATION)
+                if (status === 'normal' || status === '') {
+                    blocks.forEach(block => {
+                        block.classList.remove('is-cancelled', 'is-postponed', 'is-rattrapage');
+                        const noteEl = block.querySelector('.cb-custom-note');
+                        if (noteEl) {
+                            noteEl.textContent = '';
+                            noteEl.style.display = 'none';
+                        }
+                    });
                 }
-
-                // Normal / Annulé / Reporté → case d'origine
-                const block = document.querySelector(`.course-block[data-course-id="${courseId}"]`);
-                if (!block) return;
-
-                block.classList.remove('is-cancelled', 'is-postponed', 'is-rattrapage');
-                const noteEl = block.querySelector('.cb-custom-note');
-
-                if (status.includes('annul') || status.includes('cancel')) {
-                    block.classList.add('is-cancelled');
-                    if (noteEl) {
-                        if (note || date) {
-                            noteEl.textContent = '❌ ' + (note || date);
+                // 2) COURS DÉPLACÉ
+                else if (status.includes('deplac') || status.includes('déplac')) {
+                    blocks.forEach(block => {
+                        block.classList.add('is-cancelled');
+                        const noteEl = block.querySelector('.cb-custom-note');
+                        if (noteEl) {
+                            noteEl.textContent = '🔀 Déplacé au ' + (day || '') + ' ' + (hour || '');
                             noteEl.style.display = 'block';
-                        } else {
-                            noteEl.style.display = 'none';
                         }
-                    }
-                } else if (status.includes('report') || status.includes('postpon')) {
-                    block.classList.add('is-postponed');
-                    if (noteEl) {
-                        const parts = [];
-                        if (note) parts.push(note);
-                        if (day) parts.push('Reporté au ' + day + (hour ? ' ' + hour : ''));
-                        if (parts.length) {
-                            noteEl.textContent = '⏳ ' + parts.join(' · ');
+                    });
+                    if (day && hour) placeDynamicCourseBlock(courseId, subject, day, hour, 'deplace', combinedNote);
+                }
+                // 3) COURS REPORTÉ
+                else if (status.includes('report') || status.includes('postpon')) {
+                    blocks.forEach(block => {
+                        block.classList.add('is-postponed');
+                        const noteEl = block.querySelector('.cb-custom-note');
+                        if (noteEl) {
+                            noteEl.textContent = '⏳ Reporté au ' + (day || '') + ' ' + (hour || '');
                             noteEl.style.display = 'block';
-                        } else {
-                            noteEl.style.display = 'none';
                         }
-                    }
-                } else {
-                    if (noteEl) {
-                        if (note) {
-                            noteEl.textContent = '📌 ' + note;
+                    });
+                    if (day && hour) placeDynamicCourseBlock(courseId, subject, day, hour, 'report', combinedNote);
+                }
+                // 4) RATTRAPAGE
+                else if (status.includes('rattrap') || status.includes('suppl')) {
+                    if (day && hour) placeDynamicCourseBlock(courseId, subject, day, hour, 'rattrap', combinedNote);
+                }
+                // 5) COURS ANNULÉ
+                else if (status.includes('annul') || status.includes('cancel')) {
+                    blocks.forEach(block => {
+                        block.classList.add('is-cancelled');
+                        const noteEl = block.querySelector('.cb-custom-note');
+                        if (noteEl && combinedNote) {
+                            noteEl.textContent = '❌ ' + combinedNote;
                             noteEl.style.display = 'block';
-                        } else {
-                            noteEl.style.display = 'none';
                         }
-                    }
+                    });
                 }
             });
         } catch (e) {
-            console.warn('Sheets sync:', e);
+            console.warn('Sheets sync error:', e);
         }
     }
 
     fetchGoogleSheetsStatuses();
 
+    // Export PDF
     async function downloadPDF() {
         const btn = document.getElementById('downloadBtn');
         btn.classList.add('is-loading');
-        btn.classList.remove('is-success');
-
         try {
             const clone = document.getElementById('planningSection').cloneNode(true);
             const hint = clone.querySelector('.scroll-hint');
@@ -887,16 +885,12 @@
                 .planning-wrapper{border:none!important;border-radius:0!important;padding:0!important;background:transparent!important;box-shadow:none!important}
                 .course-block{border:1px solid rgba(0,0,0,0.06)!important}
             </style>`;
+            
             wrap.appendChild(header);
             wrap.appendChild(clone);
             document.body.appendChild(wrap);
 
-            const canvas = await html2canvas(wrap, {
-                scale: 1.5,
-                backgroundColor: '#ffffff',
-                logging: false,
-                useCORS: true
-            });
+            const canvas = await html2canvas(wrap, { scale: 1.5, backgroundColor: '#ffffff', logging: false, useCORS: true });
             document.body.removeChild(wrap);
 
             const { jsPDF } = window.jspdf;
