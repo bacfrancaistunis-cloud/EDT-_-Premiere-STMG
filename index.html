@@ -693,7 +693,7 @@
 
     const DAY_MAP = { lundi: 1, mardi: 2, mercredi: 3, jeudi: 4, vendredi: 5, samedi: 6, dimanche: 0 };
 
-    // Extraction universelle de l'heure
+    // Extraction universelle de l'heure (accepte 9h-11h, 09h00, 9, etc.)
     function parseRowIndex(hourStr) {
         if (!hourStr) return null;
         const match = hourStr.match(/(\d{1,2})/);
@@ -708,7 +708,7 @@
         if (parseInt(el.dataset.day) === today) el.classList.add('today-header');
     });
 
-    // Placement dynamique de cours
+    // Placement dynamique d'un cours
     function placeDynamicCourseBlock(courseId, subjectName, dayName, hourStart, status, noteText) {
         const dayNum = DAY_MAP[dayName.toLowerCase().trim()];
         const rowIndex = parseRowIndex(hourStart);
@@ -741,14 +741,17 @@
         let endHInt = startHInt + 2;
 
         let badgeHtml = '';
-        let statusClass = 'is-rattrapage';
+        let statusClass = ''; // Par défaut : cours normal sans surbrillance violete
 
         if (status.includes('deplac') || status.includes('déplac')) {
             badgeHtml = '<span class="status-badge badge-rattrapage" style="display:block; background:#0284c7; color:#fff;">🔀 DÉPLACÉ</span>';
+            statusClass = 'is-rattrapage';
         } else if (status.includes('report') || status.includes('postpon')) {
             badgeHtml = '<span class="status-badge badge-rattrapage" style="display:block; background:#f59e0b; color:#fff;">⏳ REPORTÉ</span>';
+            statusClass = 'is-rattrapage';
         } else if (status.includes('rattrap') || status.includes('suppl')) {
             badgeHtml = '<span class="status-badge badge-rattrapage" style="display:block; background:#4f46e5; color:#fff;">★ RATTRAPAGE</span>';
+            statusClass = 'is-rattrapage';
         }
 
         targetCell.innerHTML = `
@@ -795,7 +798,7 @@
                 const combinedNote = [note, date].filter(Boolean).join(' · ');
                 const blocks = document.querySelectorAll(`.course-block[data-course-id="${courseId}"]`);
 
-                // 1) COURS NORMAL (RÉINITIALISATION)
+                // 1) COURS NORMAL (RÉINITIALISATION + AJOUT DYNAMIQUE NORMAL)
                 if (status === 'normal' || status === '') {
                     blocks.forEach(block => {
                         block.classList.remove('is-cancelled', 'is-postponed', 'is-rattrapage');
@@ -805,6 +808,11 @@
                             noteEl.style.display = 'none';
                         }
                     });
+
+                    // NOUVEAUTÉ : Si Jour et Heure sont spécifiés, ajoute le cours comme un cours NORMAL
+                    if (day && hour) {
+                        placeDynamicCourseBlock(courseId, subject, day, hour, 'normal', combinedNote);
+                    }
                 }
                 // 2) COURS DÉPLACÉ
                 else if (status.includes('deplac') || status.includes('déplac')) {
